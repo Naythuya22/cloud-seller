@@ -1,0 +1,5 @@
+{
+  "api_key": "",
+  "model_name": "gemini-2.0-flash",
+  "skip_login": true
+}

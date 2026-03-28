@@ -1,0 +1,12 @@
+# API keys — Streamlit Secrets သုံးပါ; local သာ config.json ထားပါ
+config.json
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.streamlit/secrets.toml
+.env
+*.log
+.DS_Store
