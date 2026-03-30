@@ -3662,30 +3662,19 @@ else:
     elif page == "⚙️ Admin":
         show_admin_settings()
 
-    # အောက်ခြေ icon navigation (စာမပါ — အလျားလိုက်, height မကြီးအောင်)
-    nav_items = [
-        ("🤖", "🤖 Agent", "Agent"),
-        ("📊", "📊 Dashboard", "Dashboard"),
-        ("📝", "📝 Manual Entry", "Manual Entry"),
-        ("🛒", "🛒 အဝယ်", "အဝယ်"),
-        ("📋", "📋 Ledger", "Ledger"),
-        ("🗑️", "🗑️ Recycle Bin", "Trash"),
-        ("⚙️", "⚙️ Admin", "Admin"),
-    ]
-    nav_items = [it for it in nav_items if it[1] in _labels]
-    if nav_items:
-        st.markdown(
-            """
-<style>
-div[data-testid="stHorizontalBlock"] button[kind="secondary"]{padding:0.45rem 0.2rem;}
-</style>
-            """,
-            unsafe_allow_html=True,
-        )
-        cols = st.columns(len(nav_items))
-        for (icon, page_value, help_text), col in zip(nav_items, cols):
-            with col:
-                if st.button(icon, key=f"bottom_nav_{page_value}", help=help_text, use_container_width=True):
-                    # radio key ကို ဒီ run မှာ မပြောင်းဘဲ target သာထားပြီး rerun
-                    st.session_state["_nav_target_page"] = page_value
-                    st.rerun()
+    # အောက်ခြေ icon navigation (phone မှာ ဒေါင်မဖြစ်အောင် horizontal radio)
+    def _set_bottom_nav_target():
+        v = st.session_state.get("bottom_nav_page")
+        if v in _labels:
+            st.session_state["_nav_target_page"] = v
+
+    st.radio(
+        "",
+        options=_labels,
+        key="bottom_nav_page",
+        index=0,
+        format_func=lambda s: s.split(" ")[0] if isinstance(s, str) and " " in s else s,
+        horizontal=True,
+        label_visibility="collapsed",
+        on_change=_set_bottom_nav_target,
+    )
