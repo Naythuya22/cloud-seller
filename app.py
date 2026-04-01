@@ -2840,6 +2840,16 @@ def show_ledger_display():
                 st.caption("RawBT လင့် မဖန်တီးနိုင်ပါ (ပြေစာရှည်လွန်းနိုင်သည်)။")
             with st.expander("👁 ပြေစာ ကြည့်မည် (သို့ screenshot)", expanded=True):
                 components.html(_full, height=480, scrolling=True)
+            _png = _receipt_png_from_html(_full)
+            if _png:
+                st.download_button(
+                    label="🖼️ PNG ဒေါင်း (RawBT သို့ Share)",
+                    data=_png,
+                    file_name=f"{_dl_base}.png",
+                    mime="image/png",
+                    key=f"dlpng_{_vk}",
+                    use_container_width=True,
+                )
             st.download_button(
                 label="📄 HTML ဒေါင်း (အခြားစက်သို့ သိမ်းမည်)",
                 data=_receipt_html_file_bytes(_full),
