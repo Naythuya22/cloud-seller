@@ -3570,6 +3570,15 @@ section.main [data-testid="stRadio"] label,
 section.main [data-baseweb="radio"] label {
   color: #e2e8f0 !important;
 }
+/* အောက်ခြေ icon navigation — မြင်သာအောင် ဖျော့ဖျော့ background */
+section.main [data-testid="stRadio"] [data-baseweb="radio"] label {
+  background-color: rgba(241, 245, 249, 0.22) !important;
+  border: 1px solid rgba(148, 163, 184, 0.5) !important;
+  border-radius: 10px !important;
+  padding: 0.4rem 0.55rem !important;
+  min-width: 2.4rem !important;
+  justify-content: center !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
