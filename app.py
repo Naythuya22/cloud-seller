@@ -2821,70 +2821,20 @@ def show_ledger_display():
 
             st.success(f"✅ {_he(_cust)} ငွေရှင်းပြီးပါပြီ။")
 
-            _tpl = st.selectbox(
-                "ပြေစာပုံစံ",
-                options=["ascii_rawbt", "myanmar", "english"],
-                index=0,
-                format_func=lambda k: {
-                    "ascii_rawbt": "RawBT — Bluetooth ထာမ်မယ် (အကြံပြု)",
-                    "myanmar": "မြန်မာ — Browser Print",
-                    "english": "English — Browser Print",
-                }[k],
-                key=f"ledger_tpl_{_vk}",
+            # ပြေစာကို screenshot ပုံစံတစ်မျိုးတည်း (မြန်မာ) ပြ + HTML ဒေါင်း
+            _inner = _receipt_settlement_inner_html(_cust, _day, _lines, _tot, _by)
+            _full = _receipt_shareable_html_document(_inner, title="ငွေရှင်းပြေစာ")
+            _dl_base = _safe_receipt_download_basename(_cust, _day)
+            with st.expander("👁 ပြေစာ ကြည့်မည် (သို့ screenshot)", expanded=True):
+                components.html(_full, height=480, scrolling=True)
+            st.download_button(
+                label="📄 HTML ဒေါင်း (အခြားစက်သို့ သိမ်းမည်)",
+                data=_receipt_html_file_bytes(_full),
+                file_name=f"{_dl_base}.html",
+                mime="text/html",
+                key=f"dlhtml_{_vk}",
+                use_container_width=True,
             )
-
-            if _tpl == "ascii_rawbt":
-                _raw_lang = st.selectbox(
-                    "RawBT စာလုံးပုံစံ",
-                    options=["ascii_en", "unicode_mm"],
-                    index=1,
-                    format_func=lambda k: {
-                        "ascii_en": "English (ASCII) — အတည်ငြိမ်ဆုံး",
-                        "unicode_mm": "မြန်မာ (Unicode) — စာရင်းအတိုင်း",
-                    }[k],
-                    key=f"ledger_rawbt_lang_{_vk}",
-                )
-                if _raw_lang == "unicode_mm":
-                    _plain_thermal = _receipt_settlement_plain_text_utf8(
-                        _cust, _day, _lines, _tot, _by
-                    )
-                else:
-                    _plain_thermal = _receipt_settlement_plain_text_thermal_ascii(
-                        _cust, _day, _lines, _tot, _by,
-                    )
-                _rawbt = _rawbt_uri_from_plain_text(_plain_thermal)
-                if _rawbt:
-                    _href = html.escape(_rawbt, quote=True)
-                    _intent = _rawbt_intent_uri(_rawbt)
-                    st.markdown(
-                        f'<p style="margin:12px 0 8px 0;"><a href="{_href}" '
-                        'style="display:inline-block;padding:16px 28px;background:#1565c0;color:#fff !important;'
-                        'border-radius:12px;text-decoration:none;font-weight:700;font-size:17px;">'
-                        "📲 RawBT ဖြင့် သုတ်မည်</a></p>",
-                        unsafe_allow_html=True,
-                    )
-                    if _intent:
-                        _intent_h = html.escape(_intent, quote=True)
-                        st.markdown(
-                            f'<a href="{_intent_h}" style="font-size:12px;color:#2563eb;text-decoration:underline;">'
-                            "မတက်လျှင် Intent ဖြင့် ထပ်ဖွင့်မည်</a>",
-                            unsafe_allow_html=True,
-                        )
-                    st.caption("Bluetooth ပရင်တာ ချိတ်ပြီး RawBT ထဲတွင် ပရင်တာရွေးပြီး Print နှိပ်ပါ။")
-                    if _raw_lang == "unicode_mm":
-                        st.caption("RawBT setting မှာ Encoding ကို UTF-8 သို့မဟုတ် Text as image mode သုံးပါ။")
-                else:
-                    st.caption("ပြေစာ ရှည်လွန်းသဖြင့် RawBT လင့် မဖန်တီးနိုင်ပါ။")
-            else:
-                if _tpl == "myanmar":
-                    _inner = _receipt_settlement_inner_html(_cust, _day, _lines, _tot, _by)
-                    _title = "ငွေရှင်းပြေစာ"
-                else:
-                    _inner = _receipt_settlement_inner_html_english(_cust, _day, _lines, _tot, _by)
-                    _title = "Payment receipt"
-                _full = _receipt_shareable_html_document(_inner, title=_title)
-                st.caption("Chrome / Edge နှစ်ခုလုံးအတွက် **ဤနေရာမှ ပရင့်ထုတ်မည်** ခလုတ်တစ်ခုပဲ အသုံးပြုပါသည်။")
-                render_settlement_receipt_browser_print(_full, f"ledger_{_vk}")
 
             if st.button("ပြေစာ ပိတ်မည်", key=f"ledger_rec_close_{_vk}"):
                 st.session_state.pop("_ledger_receipt_view", None)
