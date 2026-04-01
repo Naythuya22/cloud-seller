@@ -2877,7 +2877,7 @@ def show_ledger_display():
                 "ဘာနဲ့ထုတ်မလဲ",
                 options=["add_print", "rawbt_image"],
                 horizontal=True,
-                key=f"ledger_print_mode_{_vk}",
+                key=f"ledger_print_mode_img_{_vk}",
                 format_func=lambda k: (
                     "🖨️ ပရင့် (Browser)"
                     if k == "add_print"
