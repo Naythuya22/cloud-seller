@@ -1,4 +1,4 @@
-import os, json, re, math, shutil, warnings, html, ast, operator, io, time, tempfile
+import os, json, re, math, shutil, warnings, html, ast, operator, io, time, tempfile, base64
 from urllib.parse import quote
 import pandas as pd
 import streamlit as st
@@ -1794,44 +1794,28 @@ def render_settlement_receipt_browser_print(html_full_doc: str, component_id: st
     ဘရောင်ဇာ ပရင့်မီနူး တိုက်ရိုက်ခေါ် — ဒေါင်းလုဒ်/စာသားဖိုင် မသုံးပါ။
     (ဖွင့်ထားသော ပရင့်မီနူးမှ ထာမ်မယ် သို့ စာရင်းသွင်းထားသော ပရင်တာ ရွေးပါ)
     """
+    # components iframe sandbox ကြောင့် popup ပိတ်နိုင်သောကြောင့် main DOM link နည်းသို့ပြောင်း
     safe_id = re.sub(r"[^a-zA-Z0-9_]", "_", component_id)[:48]
-    html_json = json.dumps(html_full_doc)
-    components.html(
-        f"""
-<button type="button" id="setpr_{safe_id}" style="padding:14px 22px;font-size:16px;font-weight:700;border:none;border-radius:12px;background:#b91c1c;color:#fff;width:100%;max-width:400px;cursor:pointer;touch-action:manipulation;">
-  🖨️ ဤနေရာမှ ပရင့်ထုတ်မည်
-</button>
-<p style="font-size:11px;color:#64748b;margin:8px 0 0;max-width:400px;line-height:1.45;">
-  ဘရောင်ဇာတဘ်အသစ်ဖွင့်ပြီး ပရင့်မီနူးခေါ်သည်။ မပေါ်ရင် တဘ်အသစ်ရဲ့ menu မှ Print ကိုနှိပ်ပါ။
-</p>
-<script>
-(function() {{
-  var btn = document.getElementById("setpr_{safe_id}");
-  if (!btn) return;
-  var html = {html_json};
-  btn.addEventListener("click", function() {{
-    var w = window.open("", "_blank");
-    if (!w) {{
-      alert("Popup ကို ခွင့်ပြုပြီး ထပ်နှိပ်ပါ");
-      return;
-    }}
-    try {{
-      w.document.open();
-      w.document.write(html);
-      w.document.close();
-      w.focus();
-      setTimeout(function() {{
-        try {{ w.print(); }} catch(e) {{}}
-      }}, 900);
-    }} catch(e) {{
-      alert("ပရင့်တဘ်ဖွင့်မှု မအောင်မြင်ပါ");
-    }}
-  }});
-}})();
-</script>
-""",
-        height=130,
+    auto_html = html_full_doc.replace(
+        "</body>",
+        (
+            '<div style="position:fixed;bottom:10px;left:10px;right:10px;z-index:99999;text-align:center;">'
+            '<button onclick="window.print()" '
+            'style="padding:12px 18px;border:none;border-radius:10px;background:#b91c1c;color:#fff;font-weight:700;">'
+            "🖨️ Print</button></div>"
+            "<script>setTimeout(function(){try{window.print();}catch(e){}},700);</script></body>"
+        ),
     )
+    href = "data:text/html;charset=utf-8;base64," + base64.b64encode(auto_html.encode("utf-8")).decode("ascii")
+    _href = html.escape(href, quote=True)
+    st.markdown(
+        f'<a id="setpr_{safe_id}" href="{_href}" target="_blank" '
+        'style="display:inline-block;padding:14px 22px;font-size:16px;font-weight:700;border:none;'
+        'border-radius:12px;background:#b91c1c;color:#fff !important;text-decoration:none;">'
+        "🖨️ ဤနေရာမှ ပရင့်ထုတ်မည်</a>",
+        unsafe_allow_html=True,
+    )
+    st.caption("Tab အသစ်ဖွင့်မလာရင် browser popup permission ကို Allow လုပ်ပြီး ထပ်နှိပ်ပါ။")
 
 def _rawbt_uri_from_plain_text(txt: str, max_body_chars: int = 1800):
     """Android RawBT အက်ပ် — rawbt: စာကြောင်း (အရှည်ကန့်သတ်)"""
