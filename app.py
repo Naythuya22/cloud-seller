@@ -1597,8 +1597,9 @@ def _receipt_settlement_plain_text(customer_name, settle_day, line_items, sub_to
         f"ဖောက်သည်: {customer_name}",
         "—",
     ]
-    for desc, amt in line_items:
-        lines.append(f"{desc}  {_fmt_amount(amt)} Ks")
+    for i, (desc, amt) in enumerate(line_items, 1):
+        lines.append(f"{i}. {desc}")
+        lines.append(f"   {_fmt_amount(amt)} Ks")
     lines.append(f"စုစုပေါင်း: {_fmt_amount(sub_total)} Ks")
     lines.append(f"ငွေရှင်းချသူ: {settled_by}")
     lines.append(datetime.now().strftime("%Y-%m-%d %H:%M"))
@@ -2814,10 +2815,10 @@ def show_ledger_display():
                 _raw_lang = st.selectbox(
                     "RawBT စာလုံးပုံစံ",
                     options=["ascii_en", "unicode_mm"],
-                    index=0,
+                    index=1,
                     format_func=lambda k: {
                         "ascii_en": "English (ASCII) — အတည်ငြိမ်ဆုံး",
-                        "unicode_mm": "မြန်မာ (Unicode)",
+                        "unicode_mm": "မြန်မာ (Unicode) — စာရင်းအတိုင်း",
                     }[k],
                     key=f"ledger_rawbt_lang_{_vk}",
                 )
