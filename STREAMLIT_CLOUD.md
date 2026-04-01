@@ -44,7 +44,6 @@ Cloud မှာ **redeploy / restart** လုပ်တိုင်း **containe
 ## ၅) လိုအပ်သော ဖိုင်များ
 
 - `requirements.txt` — Cloud က အလိုအလျောက် `pip install` လုပ်ပါသည်။
-- `packages.txt` — `html2image` ဖြင့် ပြေစာ PNG ဖန်တီးရန် headless **chromium** လိုအပ်နိုင်ပါသည် (မျဉ်းတစ်ကြောင်းချင်း package အမည်)။
 - `.streamlit/config.toml` — ချိန်ညှိချက် (ထည့်ပြီးသား)
 
 ## ၆) ပြဿနာဖြေရှင်း
