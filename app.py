@@ -2825,6 +2825,19 @@ def show_ledger_display():
             _inner = _receipt_settlement_inner_html(_cust, _day, _lines, _tot, _by)
             _full = _receipt_shareable_html_document(_inner, title="ငွေရှင်းပြေစာ")
             _dl_base = _safe_receipt_download_basename(_cust, _day)
+            _raw_txt = _receipt_settlement_plain_text_utf8(_cust, _day, _lines, _tot, _by)
+            _rawbt = _rawbt_uri_from_plain_text(_raw_txt)
+            if _rawbt:
+                _href = html.escape(_rawbt, quote=True)
+                st.markdown(
+                    f'<p style="margin:10px 0 8px 0;"><a href="{_href}" '
+                    'style="display:inline-block;padding:14px 22px;background:#1565c0;color:#fff !important;'
+                    'border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">'
+                    "📲 RawBT ဖြင့် ထုတ်မည်</a></p>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption("RawBT လင့် မဖန်တီးနိုင်ပါ (ပြေစာရှည်လွန်းနိုင်သည်)။")
             with st.expander("👁 ပြေစာ ကြည့်မည် (သို့ screenshot)", expanded=True):
                 components.html(_full, height=480, scrolling=True)
             st.download_button(
