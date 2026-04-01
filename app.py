@@ -1828,6 +1828,13 @@ def _rawbt_uri_from_plain_text(txt: str, max_body_chars: int = 1800):
         return None
     return uri
 
+def _rawbt_intent_uri(rawbt_uri: str):
+    """Android Chrome fallback: intent:// style for RawBT app launch."""
+    if not rawbt_uri or not str(rawbt_uri).startswith("rawbt:"):
+        return None
+    body = str(rawbt_uri)[len("rawbt:") :]
+    return "intent:" + body + "#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end"
+
 def render_bluetooth_receipt_print_button(button_id: str, inner_body_html: str):
     """ပရင့်ဒိုင်ယလော့ — စနစ်ပရင့်မီနူးမှ ချိတ်ထားသော ထာမ်မယ် ရွေးထုတ်နိုင်"""
     inner_json = json.dumps(inner_body_html)
@@ -2793,11 +2800,12 @@ def show_ledger_display():
 
             _tpl = st.selectbox(
                 "ပြေစာပုံစံ",
-                options=["myanmar", "english", "ascii_rawbt"],
+                options=["ascii_rawbt", "myanmar", "english"],
+                index=0,
                 format_func=lambda k: {
-                    "myanmar": "မြန်မာ — ပရင့် / PNG ဒေါင်း / HTML",
-                    "english": "English — ပရင့် / PNG ဒေါင်း / HTML",
-                    "ascii_rawbt": "RawBT — ASCII သာ (ထာမ်မယ်)",
+                    "ascii_rawbt": "RawBT — Bluetooth ထာမ်မယ် (အကြံပြု)",
+                    "myanmar": "မြန်မာ — Browser Print",
+                    "english": "English — Browser Print",
                 }[k],
                 key=f"ledger_tpl_{_vk}",
             )
@@ -2809,6 +2817,7 @@ def show_ledger_display():
                 _rawbt = _rawbt_uri_from_plain_text(_plain_thermal)
                 if _rawbt:
                     _href = html.escape(_rawbt, quote=True)
+                    _intent = _rawbt_intent_uri(_rawbt)
                     st.markdown(
                         f'<p style="margin:12px 0 8px 0;"><a href="{_href}" '
                         'style="display:inline-block;padding:16px 28px;background:#1565c0;color:#fff !important;'
@@ -2816,6 +2825,14 @@ def show_ledger_display():
                         "📲 RawBT ဖြင့် သုတ်မည်</a></p>",
                         unsafe_allow_html=True,
                     )
+                    if _intent:
+                        _intent_h = html.escape(_intent, quote=True)
+                        st.markdown(
+                            f'<a href="{_intent_h}" style="font-size:12px;color:#2563eb;text-decoration:underline;">'
+                            "မတက်လျှင် Intent ဖြင့် ထပ်ဖွင့်မည်</a>",
+                            unsafe_allow_html=True,
+                        )
+                    st.caption("Bluetooth ပရင်တာ ချိတ်ပြီး RawBT ထဲတွင် ပရင်တာရွေးပြီး Print နှိပ်ပါ။")
                 else:
                     st.caption("ပြေစာ ရှည်လွန်းသဖြင့် RawBT လင့် မဖန်တီးနိုင်ပါ။")
             else:
