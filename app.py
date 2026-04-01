@@ -1606,6 +1606,28 @@ def _receipt_settlement_plain_text(customer_name, settle_day, line_items, sub_to
     lines.append("ကျေးဇူးတင်ပါသည်")
     return "\n".join(lines)
 
+def _receipt_settlement_plain_text_utf8(customer_name, settle_day, line_items, sub_total, settled_by):
+    """
+    RawBT UTF mode: Myanmar item names ကို မဖြုတ်ဘဲ UTF-8 ဖြင့်ပို့။
+    Label မပေါ်တတ်သော printer/codepage တွေအတွက် English label ကိုပါ တွဲထည့်သည်။
+    """
+    lines = [
+        "KO KYAW RICE SHOP / ကိုကျော် ထမင်းဆိုင်",
+        "SETTLEMENT / ငွေရှင်းပြေစာ",
+        f"Date: {settle_day}",
+        f"Customer: {customer_name}",
+        "---",
+    ]
+    for i, (desc, amt) in enumerate(line_items, 1):
+        lines.append(f"{i}. {desc}")
+        lines.append(f"   {_fmt_amount(amt)} Ks")
+    lines.append("---")
+    lines.append(f"TOTAL: {_fmt_amount(sub_total)} Ks")
+    lines.append(f"By: {settled_by}")
+    lines.append(datetime.now().strftime("%Y-%m-%d %H:%M"))
+    lines.append("Thank you / ကျေးဇူးတင်ပါသည်")
+    return "\n".join(lines)
+
 
 def _receipt_settlement_plain_text_english(customer_name, settle_day, line_items, sub_total, settled_by):
     """English plain text version for thermal printing and avoid charset issues."""
@@ -1823,7 +1845,7 @@ def _rawbt_uri_from_plain_text(txt: str, max_body_chars: int = 1800):
     t = (txt or "").strip()
     if len(t) > max_body_chars:
         t = t[: max_body_chars - 20].rstrip() + "\n...(truncated)"
-    q = quote(t, safe="")
+    q = quote(t, safe="", encoding="utf-8", errors="strict")
     uri = "rawbt:" + q
     if len(uri) > 7000:
         return None
@@ -2823,7 +2845,7 @@ def show_ledger_display():
                     key=f"ledger_rawbt_lang_{_vk}",
                 )
                 if _raw_lang == "unicode_mm":
-                    _plain_thermal = _receipt_settlement_plain_text(
+                    _plain_thermal = _receipt_settlement_plain_text_utf8(
                         _cust, _day, _lines, _tot, _by
                     )
                 else:
@@ -2850,7 +2872,7 @@ def show_ledger_display():
                         )
                     st.caption("Bluetooth ပရင်တာ ချိတ်ပြီး RawBT ထဲတွင် ပရင်တာရွေးပြီး Print နှိပ်ပါ။")
                     if _raw_lang == "unicode_mm":
-                        st.caption("မြန်မာ mode သည် printer code page ပေါ်မူတည်ပြီး စာလုံးမမှန်နိုင်ပါသည်။")
+                        st.caption("RawBT setting မှာ Encoding ကို UTF-8 သို့မဟုတ် Text as image mode သုံးပါ။")
                 else:
                     st.caption("ပြေစာ ရှည်လွန်းသဖြင့် RawBT လင့် မဖန်တီးနိုင်ပါ။")
             else:
