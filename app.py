@@ -2811,9 +2811,24 @@ def show_ledger_display():
             )
 
             if _tpl == "ascii_rawbt":
-                _plain_thermal = _receipt_settlement_plain_text_thermal_ascii(
-                    _cust, _day, _lines, _tot, _by,
+                _raw_lang = st.selectbox(
+                    "RawBT စာလုံးပုံစံ",
+                    options=["ascii_en", "unicode_mm"],
+                    index=0,
+                    format_func=lambda k: {
+                        "ascii_en": "English (ASCII) — အတည်ငြိမ်ဆုံး",
+                        "unicode_mm": "မြန်မာ (Unicode)",
+                    }[k],
+                    key=f"ledger_rawbt_lang_{_vk}",
                 )
+                if _raw_lang == "unicode_mm":
+                    _plain_thermal = _receipt_settlement_plain_text(
+                        _cust, _day, _lines, _tot, _by
+                    )
+                else:
+                    _plain_thermal = _receipt_settlement_plain_text_thermal_ascii(
+                        _cust, _day, _lines, _tot, _by,
+                    )
                 _rawbt = _rawbt_uri_from_plain_text(_plain_thermal)
                 if _rawbt:
                     _href = html.escape(_rawbt, quote=True)
@@ -2833,6 +2848,8 @@ def show_ledger_display():
                             unsafe_allow_html=True,
                         )
                     st.caption("Bluetooth ပရင်တာ ချိတ်ပြီး RawBT ထဲတွင် ပရင်တာရွေးပြီး Print နှိပ်ပါ။")
+                    if _raw_lang == "unicode_mm":
+                        st.caption("မြန်မာ mode သည် printer code page ပေါ်မူတည်ပြီး စာလုံးမမှန်နိုင်ပါသည်။")
                 else:
                     st.caption("ပြေစာ ရှည်လွန်းသဖြင့် RawBT လင့် မဖန်တီးနိုင်ပါ။")
             else:
