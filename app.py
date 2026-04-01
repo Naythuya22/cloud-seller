@@ -1802,7 +1802,7 @@ def render_settlement_receipt_browser_print(html_full_doc: str, component_id: st
   🖨️ ဤနေရာမှ ပရင့်ထုတ်မည်
 </button>
 <p style="font-size:11px;color:#64748b;margin:8px 0 0;max-width:400px;line-height:1.45;">
-  ဒေါင်းလုတ် မလိုပါ။ ပရင့်မီနူး ပေါ်လာပါက <b>ထာမ်မယ်</b> သို့ သင့်ပရင်တာ ရွေးပါ။ မပေါ်ရင် ဘရောင်ဇာ မီနူးမှ Print ရှာပါ။
+  ဘရောင်ဇာတဘ်အသစ်ဖွင့်ပြီး ပရင့်မီနူးခေါ်သည်။ မပေါ်ရင် တဘ်အသစ်ရဲ့ menu မှ Print ကိုနှိပ်ပါ။
 </p>
 <script>
 (function() {{
@@ -1810,23 +1810,22 @@ def render_settlement_receipt_browser_print(html_full_doc: str, component_id: st
   if (!btn) return;
   var html = {html_json};
   btn.addEventListener("click", function() {{
-    var iframe = document.createElement("iframe");
-    iframe.setAttribute("title", "ledger-receipt-print");
-    iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:0;opacity:0;z-index:2147483646;pointer-events:none;";
-    document.body.appendChild(iframe);
-    var d = iframe.contentDocument || iframe.contentWindow.document;
-    d.open();
-    d.write(html);
-    d.close();
-    setTimeout(function() {{
-      try {{
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      }} catch(e) {{}}
-    }}, 900);
-    setTimeout(function() {{
-      try {{ if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }} catch(e) {{}}
-    }}, 120000);
+    var w = window.open("", "_blank");
+    if (!w) {{
+      alert("Popup ကို ခွင့်ပြုပြီး ထပ်နှိပ်ပါ");
+      return;
+    }}
+    try {{
+      w.document.open();
+      w.document.write(html);
+      w.document.close();
+      w.focus();
+      setTimeout(function() {{
+        try {{ w.print(); }} catch(e) {{}}
+      }}, 900);
+    }} catch(e) {{
+      alert("ပရင့်တဘ်ဖွင့်မှု မအောင်မြင်ပါ");
+    }}
   }});
 }})();
 </script>
