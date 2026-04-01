@@ -2825,39 +2825,49 @@ def show_ledger_display():
             _inner = _receipt_settlement_inner_html(_cust, _day, _lines, _tot, _by)
             _full = _receipt_shareable_html_document(_inner, title="ငွေရှင်းပြေစာ")
             _dl_base = _safe_receipt_download_basename(_cust, _day)
-            _raw_txt = _receipt_settlement_plain_text_utf8(_cust, _day, _lines, _tot, _by)
-            _rawbt = _rawbt_uri_from_plain_text(_raw_txt)
-            if _rawbt:
-                _href = html.escape(_rawbt, quote=True)
-                st.markdown(
-                    f'<p style="margin:10px 0 8px 0;"><a href="{_href}" '
-                    'style="display:inline-block;padding:14px 22px;background:#1565c0;color:#fff !important;'
-                    'border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">'
-                    "📲 RawBT ဖြင့် ထုတ်မည်</a></p>",
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.caption("RawBT လင့် မဖန်တီးနိုင်ပါ (ပြေစာရှည်လွန်းနိုင်သည်)။")
             with st.expander("👁 ပြေစာ ကြည့်မည် (သို့ screenshot)", expanded=True):
                 components.html(_full, height=480, scrolling=True)
-            _png = _receipt_png_from_html(_full)
-            if _png:
+            _print_mode = st.radio(
+                "ဘာနဲ့ထုတ်မလဲ",
+                options=["add_print", "rawbt"],
+                horizontal=True,
+                key=f"ledger_print_mode_{_vk}",
+                format_func=lambda k: "🖨️ Add Print" if k == "add_print" else "📲 RawBT",
+            )
+            if _print_mode == "add_print":
+                render_settlement_receipt_browser_print(_full, f"ledger_{_vk}")
+            else:
+                _raw_txt = _receipt_settlement_plain_text_utf8(_cust, _day, _lines, _tot, _by)
+                _rawbt = _rawbt_uri_from_plain_text(_raw_txt)
+                if _rawbt:
+                    _href = html.escape(_rawbt, quote=True)
+                    st.markdown(
+                        f'<p style="margin:10px 0 8px 0;"><a href="{_href}" '
+                        'style="display:inline-block;padding:14px 22px;background:#1565c0;color:#fff !important;'
+                        'border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">'
+                        "📲 RawBT ဖြင့် ထုတ်မည်</a></p>",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.caption("RawBT လင့် မဖန်တီးနိုင်ပါ (ပြေစာရှည်လွန်းနိုင်သည်)။")
+                _png = _receipt_png_from_html(_full)
+                if _png:
+                    st.download_button(
+                        label="🖼️ PNG ဒေါင်း (RawBT သို့ Share)",
+                        data=_png,
+                        file_name=f"{_dl_base}.png",
+                        mime="image/png",
+                        key=f"dlpng_{_vk}",
+                        use_container_width=True,
+                    )
                 st.download_button(
-                    label="🖼️ PNG ဒေါင်း (RawBT သို့ Share)",
-                    data=_png,
-                    file_name=f"{_dl_base}.png",
-                    mime="image/png",
-                    key=f"dlpng_{_vk}",
+                    label="📄 HTML ဒေါင်း (အခြားစက်သို့ သိမ်းမည်)",
+                    data=_receipt_html_file_bytes(_full),
+                    file_name=f"{_dl_base}.html",
+                    mime="text/html",
+                    key=f"dlhtml_{_vk}",
                     use_container_width=True,
                 )
-            st.download_button(
-                label="📄 HTML ဒေါင်း (အခြားစက်သို့ သိမ်းမည်)",
-                data=_receipt_html_file_bytes(_full),
-                file_name=f"{_dl_base}.html",
-                mime="text/html",
-                key=f"dlhtml_{_vk}",
-                use_container_width=True,
-            )
 
             if st.button("ပြေစာ ပိတ်မည်", key=f"ledger_rec_close_{_vk}"):
                 st.session_state.pop("_ledger_receipt_view", None)
