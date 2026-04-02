@@ -57,6 +57,7 @@ def init_db():
                 _sheets["PurchaseCatalog"] = pd.DataFrame(columns=["ItemName", "RefPrice"])
                 _chg = True
             if _chg:
+                backup_before_overwrite(MASTER_FILE)
                 with pd.ExcelWriter(MASTER_FILE, engine="openpyxl") as w:
                     for _sn, _d in _sheets.items():
                         _d.to_excel(w, sheet_name=_sn, index=False)
@@ -81,6 +82,7 @@ def init_db():
                 _ldf["SettledBy"] = ""
                 w = True
             if w:
+                backup_before_overwrite(LEDGER_FILE)
                 _ldf.to_excel(LEDGER_FILE, index=False)
                 sync_to_download(LEDGER_FILE)
         except Exception:
@@ -100,6 +102,7 @@ def init_db():
                 _pdf["Status"] = "Unpaid"
                 pw = True
             if pw:
+                backup_before_overwrite(PAYABLE_FILE)
                 _pdf.to_excel(PAYABLE_FILE, index=False)
                 sync_to_download(PAYABLE_FILE)
         except Exception:
@@ -204,6 +207,7 @@ def add_user(username, password, role, name):
             "role": role,
             "name": name
         }
+        backup_before_overwrite(USERS_FILE)
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(users, f, ensure_ascii=False)
         return True
@@ -240,6 +244,7 @@ def get_config():
 
 def save_config(api_key, model_name, skip_login=None):
     model_name = model_name.replace('google/','',1) if model_name.startswith('google/') else model_name
+    backup_before_overwrite(CONFIG_FILE)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -264,6 +269,7 @@ def write_master_sheet(sheet_name, df):
     try:    sheets = pd.read_excel(MASTER_FILE, sheet_name=None)
     except: sheets = {}
     sheets[sheet_name] = df
+    backup_before_overwrite(MASTER_FILE)
     with pd.ExcelWriter(MASTER_FILE, engine='openpyxl') as w:
         for s, d in sheets.items(): d.to_excel(w, sheet_name=s, index=False)
 
@@ -292,6 +298,7 @@ def load_memory():
     except: return []
 
 def save_memory(mem: list):
+    backup_before_overwrite(MEMORY_FILE)
     with open(MEMORY_FILE, 'w', encoding='utf-8') as f: json.dump(mem[-40:], f, ensure_ascii=False)
 
 def add_memory(role: str, text: str):
@@ -319,10 +326,12 @@ def append_chat_memory(user_txt: str, bot_txt: str):
         "user": (user_txt or "")[:2000],
         "bot": (bot_txt or "")[:2000],
     })
+    backup_before_overwrite(CHAT_MEMORY_FILE)
     with open(CHAT_MEMORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(m[-80:], f, ensure_ascii=False)
 
 def clear_chat_memory_file():
+    backup_before_overwrite(CHAT_MEMORY_FILE)
     with open(CHAT_MEMORY_FILE, 'w', encoding='utf-8') as f:
         json.dump([], f)
 
@@ -362,6 +371,7 @@ def append_audit(action: str, detail: str):
         if not isinstance(log, list):
             log = []
         log.append(ent)
+        backup_before_overwrite(AUDIT_FILE)
         with open(AUDIT_FILE, 'w', encoding='utf-8') as f:
             json.dump(log[-400:], f, ensure_ascii=False)
     except Exception:
@@ -404,6 +414,36 @@ def maybe_daily_backup():
                 shutil.copy2(fp, os.path.join(bdir, os.path.basename(fn)))
         with open(sentinel, "w", encoding="utf-8") as f:
             f.write("ok")
+    except Exception:
+        pass
+
+AUTOSAVE_MAX_FILES = 30
+
+def backup_before_overwrite(rel_fn: str) -> None:
+    """
+    ဒေတာဖိုင် မပြောင်းမီ ရှိပြီးသား ဖိုင်ကို backups/autosave/<ဖိုင်အမည်>/ မှာ
+    အချိန်နှိမ်နာမည်နဲ့ ကော်ပီထားသည်။ update မှားလည်း ယခင်ဖိုင် ပြန်ရှာသုံးနိုင်သည်။
+    """
+    try:
+        fp = _resolve_data_path(rel_fn)
+        if not os.path.isfile(fp) or os.path.getsize(fp) <= 0:
+            return
+        base = os.path.dirname(os.path.abspath(__file__))
+        bn = os.path.basename(rel_fn)
+        safe_sub = re.sub(r"[^\w.\-]+", "_", bn) or "data"
+        sub = os.path.join(base, "backups", "autosave", safe_sub)
+        os.makedirs(sub, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        dest = os.path.join(sub, f"{ts}_{bn}")
+        shutil.copy2(fp, dest)
+        all_f = sorted(
+            f for f in os.listdir(sub) if os.path.isfile(os.path.join(sub, f))
+        )
+        while len(all_f) > AUTOSAVE_MAX_FILES:
+            try:
+                os.remove(os.path.join(sub, all_f.pop(0)))
+            except OSError:
+                break
     except Exception:
         pass
 
@@ -1033,6 +1073,7 @@ def save_to_ledger(name, desc, amount, date=None):
     date = date or datetime.now().strftime("%Y-%m-%d")
     df = pd.concat([df, pd.DataFrame([{"Date": date, "Name": name, "Description": desc,
                     "Amount": amount, "Status": "Unpaid", "SettledAt": pd.NaT, "SettledBy": ""}])], ignore_index=True)
+    backup_before_overwrite(LEDGER_FILE)
     df.to_excel(LEDGER_FILE, index=False)
     sync_to_download(LEDGER_FILE)
 
@@ -1052,6 +1093,7 @@ def save_purchase_record(item_name, price, date=None):
         [df, pd.DataFrame([{"Date": date, "ItemName": item_name, "Price": p}])],
         ignore_index=True,
     )
+    backup_before_overwrite(PURCHASE_FILE)
     df.to_excel(PURCHASE_FILE, index=False)
     sync_to_download(PURCHASE_FILE)
     return True, None
@@ -1072,6 +1114,7 @@ def update_purchase_row(row_index, date_str, item_name, price):
     df.loc[row_index, "Date"] = date_str
     df.loc[row_index, "ItemName"] = item_name
     df.loc[row_index, "Price"] = p
+    backup_before_overwrite(PURCHASE_FILE)
     df.to_excel(PURCHASE_FILE, index=False)
     sync_to_download(PURCHASE_FILE)
     return True, None
@@ -1109,6 +1152,7 @@ def save_payable_record(creditor_name, description, amount, date=None):
         }])],
         ignore_index=True,
     )
+    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True, None
@@ -1133,6 +1177,7 @@ def update_payable_row(row_index, date_str, creditor_name, description, amount):
     df.loc[row_index, "CreditorName"] = creditor_name
     df.loc[row_index, "Description"] = desc
     df.loc[row_index, "Amount"] = amt
+    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True, None
@@ -1147,6 +1192,7 @@ def settle_payable_row(row_index, settled_by=None):
     df.loc[row_index, "Status"] = "Paid"
     df.loc[row_index, "SettledAt"] = datetime.now().strftime("%Y-%m-%d")
     df.loc[row_index, "SettledBy"] = who
+    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True
@@ -1161,6 +1207,7 @@ def settle_payable_creditor_all(creditor_name, settled_by=None):
     df.loc[mask, "Status"] = "Paid"
     df.loc[mask, "SettledAt"] = datetime.now().strftime("%Y-%m-%d")
     df.loc[mask, "SettledBy"] = who
+    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True
@@ -1180,6 +1227,7 @@ def clear_customer_bill(name, settled_by=None):
         df.loc[mask,'SettledAt'] = datetime.now().strftime("%Y-%m-%d")
         who = (settled_by or "").strip() or "—"
         df.loc[mask,'SettledBy'] = who
+        backup_before_overwrite(LEDGER_FILE)
         df.to_excel(LEDGER_FILE, index=False)
         sync_to_download(LEDGER_FILE)
         return True
@@ -1192,6 +1240,8 @@ def move_to_trash(row_index):
     row['DeletedAt'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     trash_df = pd.concat([trash_df, row], ignore_index=True)
     df = df.drop(row_index).reset_index(drop=True)
+    backup_before_overwrite(LEDGER_FILE)
+    backup_before_overwrite(TRASH_FILE)
     df.to_excel(LEDGER_FILE, index=False)
     trash_df.to_excel(TRASH_FILE, index=False)
     sync_to_download(LEDGER_FILE)
@@ -1213,6 +1263,8 @@ def restore_from_trash(trash_row_index):
     }
     ldf = pd.concat([ldf, pd.DataFrame([rec])], ignore_index=True)
     tdf = tdf.drop(trash_row_index).reset_index(drop=True)
+    backup_before_overwrite(LEDGER_FILE)
+    backup_before_overwrite(TRASH_FILE)
     ldf.to_excel(LEDGER_FILE, index=False)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(LEDGER_FILE)
@@ -1224,6 +1276,7 @@ def purge_trash_row(trash_row_index):
     if trash_row_index not in tdf.index:
         return False
     tdf = tdf.drop(trash_row_index).reset_index(drop=True)
+    backup_before_overwrite(TRASH_FILE)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(TRASH_FILE)
     return True
@@ -1249,6 +1302,8 @@ def restore_trash_batch(indices):
         })
     ldf = pd.concat([ldf, pd.DataFrame(recs)], ignore_index=True)
     tdf = tdf.drop(ix).reset_index(drop=True)
+    backup_before_overwrite(LEDGER_FILE)
+    backup_before_overwrite(TRASH_FILE)
     ldf.to_excel(LEDGER_FILE, index=False)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(LEDGER_FILE)
@@ -1261,6 +1316,7 @@ def purge_trash_batch(indices):
     if not ix:
         return False
     tdf = tdf.drop(ix).reset_index(drop=True)
+    backup_before_overwrite(TRASH_FILE)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(TRASH_FILE)
     return True
@@ -1295,6 +1351,7 @@ def update_ledger_row(row_index, date_str, description, amount):
     df.loc[row_index, "Date"] = date_str
     df.loc[row_index, "Description"] = desc
     df.loc[row_index, "Amount"] = amt
+    backup_before_overwrite(LEDGER_FILE)
     df.to_excel(LEDGER_FILE, index=False)
     sync_to_download(LEDGER_FILE)
     return True, None
@@ -2795,6 +2852,15 @@ def show_admin_settings():
         "ဒေတာအမြဲတမ်း: လက်ရှိတွင် Excel ဖိုင်များ သုံးထားပါသည်။ "
         "အသုံးပြုသူများစွာ တစ်ချိန်တည်း ရေးမယ်ဆို SQLite/DB သို့ ပြောင်းသင့်ပါသည်။"
     )
+
+    _bak_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups")
+    with st.expander("💾 ဒေတာ ကော်ပီ (မပျက်အောင်)", expanded=False):
+        st.markdown(
+            f"စာရင်း/မှာယူမှု **ပြင်တိုင်း သို့မဟုတ် သိမ်းတိုင်း** ယခင် ဖိုင်ကို အလိုအလျောက် ကော်ပီယူပါသည်။\n\n"
+            f"- **နေ့လိုက် snapshot:** `{_bak_root}\\` အောက်က `YYYY-MM-DD` ဖိုလ်ဒါ\n"
+            f"- **မရေးမီ ကော်ပီ (နောက်ဆုံး ၃၀ ကြိမ်/ဖိုင်):** `{_bak_root}\\autosave\\ledger_data.xlsx\\` စသည်\n\n"
+            "ပြန်သုံးချင်ရင် — autosave ထဲက နောက်ဆုံး `ledger_data.xlsx` ကို project ဖိုလ်ဒါရှိ `ledger_data.xlsx` အပေါ် ကော်ပီထိုးပါ။"
+        )
 
 # ══════════════════════════════════════════════════════════════════
 #  MAIN APP
