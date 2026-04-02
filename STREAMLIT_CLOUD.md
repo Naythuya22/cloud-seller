@@ -44,6 +44,7 @@ Cloud မှာ **redeploy / restart** လုပ်တိုင်း **containe
 ## ၅) လိုအပ်သော ဖိုင်များ
 
 - `requirements.txt` — Cloud က အလိုအလျောက် `pip install` လုပ်ပါသည်။
+- `packages.txt` — RawBT ပုံ mode (`html2image`) အတွက် headless **chromium** လိုအပ်နိုင်ပါသည်။
 - `.streamlit/config.toml` — ချိန်ညှိချက် (ထည့်ပြီးသား)
 
 ## ၆) ပြဿနာဖြေရှင်း
