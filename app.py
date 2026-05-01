@@ -1,4 +1,5 @@
-import os, json, re, math, shutil, warnings, html, ast, operator, io, time, tempfile, base64
+import os, json, re, math, shutil, warnings, html, ast, operator, io, time
+from urllib.parse import quote
 import pandas as pd
 import streamlit as st
 import google.generativeai as genai
@@ -57,7 +58,6 @@ def init_db():
                 _sheets["PurchaseCatalog"] = pd.DataFrame(columns=["ItemName", "RefPrice"])
                 _chg = True
             if _chg:
-                backup_before_overwrite(MASTER_FILE)
                 with pd.ExcelWriter(MASTER_FILE, engine="openpyxl") as w:
                     for _sn, _d in _sheets.items():
                         _d.to_excel(w, sheet_name=_sn, index=False)
@@ -82,7 +82,6 @@ def init_db():
                 _ldf["SettledBy"] = ""
                 w = True
             if w:
-                backup_before_overwrite(LEDGER_FILE)
                 _ldf.to_excel(LEDGER_FILE, index=False)
                 sync_to_download(LEDGER_FILE)
         except Exception:
@@ -102,7 +101,6 @@ def init_db():
                 _pdf["Status"] = "Unpaid"
                 pw = True
             if pw:
-                backup_before_overwrite(PAYABLE_FILE)
                 _pdf.to_excel(PAYABLE_FILE, index=False)
                 sync_to_download(PAYABLE_FILE)
         except Exception:
@@ -207,7 +205,6 @@ def add_user(username, password, role, name):
             "role": role,
             "name": name
         }
-        backup_before_overwrite(USERS_FILE)
         with open(USERS_FILE, 'w', encoding='utf-8') as f:
             json.dump(users, f, ensure_ascii=False)
         return True
@@ -244,7 +241,6 @@ def get_config():
 
 def save_config(api_key, model_name, skip_login=None):
     model_name = model_name.replace('google/','',1) if model_name.startswith('google/') else model_name
-    backup_before_overwrite(CONFIG_FILE)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -269,7 +265,6 @@ def write_master_sheet(sheet_name, df):
     try:    sheets = pd.read_excel(MASTER_FILE, sheet_name=None)
     except: sheets = {}
     sheets[sheet_name] = df
-    backup_before_overwrite(MASTER_FILE)
     with pd.ExcelWriter(MASTER_FILE, engine='openpyxl') as w:
         for s, d in sheets.items(): d.to_excel(w, sheet_name=s, index=False)
 
@@ -298,7 +293,6 @@ def load_memory():
     except: return []
 
 def save_memory(mem: list):
-    backup_before_overwrite(MEMORY_FILE)
     with open(MEMORY_FILE, 'w', encoding='utf-8') as f: json.dump(mem[-40:], f, ensure_ascii=False)
 
 def add_memory(role: str, text: str):
@@ -326,12 +320,10 @@ def append_chat_memory(user_txt: str, bot_txt: str):
         "user": (user_txt or "")[:2000],
         "bot": (bot_txt or "")[:2000],
     })
-    backup_before_overwrite(CHAT_MEMORY_FILE)
     with open(CHAT_MEMORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(m[-80:], f, ensure_ascii=False)
 
 def clear_chat_memory_file():
-    backup_before_overwrite(CHAT_MEMORY_FILE)
     with open(CHAT_MEMORY_FILE, 'w', encoding='utf-8') as f:
         json.dump([], f)
 
@@ -371,7 +363,6 @@ def append_audit(action: str, detail: str):
         if not isinstance(log, list):
             log = []
         log.append(ent)
-        backup_before_overwrite(AUDIT_FILE)
         with open(AUDIT_FILE, 'w', encoding='utf-8') as f:
             json.dump(log[-400:], f, ensure_ascii=False)
     except Exception:
@@ -414,36 +405,6 @@ def maybe_daily_backup():
                 shutil.copy2(fp, os.path.join(bdir, os.path.basename(fn)))
         with open(sentinel, "w", encoding="utf-8") as f:
             f.write("ok")
-    except Exception:
-        pass
-
-AUTOSAVE_MAX_FILES = 30
-
-def backup_before_overwrite(rel_fn: str) -> None:
-    """
-    ဒေတာဖိုင် မပြောင်းမီ ရှိပြီးသား ဖိုင်ကို backups/autosave/<ဖိုင်အမည်>/ မှာ
-    အချိန်နှိမ်နာမည်နဲ့ ကော်ပီထားသည်။ update မှားလည်း ယခင်ဖိုင် ပြန်ရှာသုံးနိုင်သည်။
-    """
-    try:
-        fp = _resolve_data_path(rel_fn)
-        if not os.path.isfile(fp) or os.path.getsize(fp) <= 0:
-            return
-        base = os.path.dirname(os.path.abspath(__file__))
-        bn = os.path.basename(rel_fn)
-        safe_sub = re.sub(r"[^\w.\-]+", "_", bn) or "data"
-        sub = os.path.join(base, "backups", "autosave", safe_sub)
-        os.makedirs(sub, exist_ok=True)
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        dest = os.path.join(sub, f"{ts}_{bn}")
-        shutil.copy2(fp, dest)
-        all_f = sorted(
-            f for f in os.listdir(sub) if os.path.isfile(os.path.join(sub, f))
-        )
-        while len(all_f) > AUTOSAVE_MAX_FILES:
-            try:
-                os.remove(os.path.join(sub, all_f.pop(0)))
-            except OSError:
-                break
     except Exception:
         pass
 
@@ -1073,7 +1034,6 @@ def save_to_ledger(name, desc, amount, date=None):
     date = date or datetime.now().strftime("%Y-%m-%d")
     df = pd.concat([df, pd.DataFrame([{"Date": date, "Name": name, "Description": desc,
                     "Amount": amount, "Status": "Unpaid", "SettledAt": pd.NaT, "SettledBy": ""}])], ignore_index=True)
-    backup_before_overwrite(LEDGER_FILE)
     df.to_excel(LEDGER_FILE, index=False)
     sync_to_download(LEDGER_FILE)
 
@@ -1093,7 +1053,6 @@ def save_purchase_record(item_name, price, date=None):
         [df, pd.DataFrame([{"Date": date, "ItemName": item_name, "Price": p}])],
         ignore_index=True,
     )
-    backup_before_overwrite(PURCHASE_FILE)
     df.to_excel(PURCHASE_FILE, index=False)
     sync_to_download(PURCHASE_FILE)
     return True, None
@@ -1114,7 +1073,6 @@ def update_purchase_row(row_index, date_str, item_name, price):
     df.loc[row_index, "Date"] = date_str
     df.loc[row_index, "ItemName"] = item_name
     df.loc[row_index, "Price"] = p
-    backup_before_overwrite(PURCHASE_FILE)
     df.to_excel(PURCHASE_FILE, index=False)
     sync_to_download(PURCHASE_FILE)
     return True, None
@@ -1152,7 +1110,6 @@ def save_payable_record(creditor_name, description, amount, date=None):
         }])],
         ignore_index=True,
     )
-    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True, None
@@ -1177,7 +1134,6 @@ def update_payable_row(row_index, date_str, creditor_name, description, amount):
     df.loc[row_index, "CreditorName"] = creditor_name
     df.loc[row_index, "Description"] = desc
     df.loc[row_index, "Amount"] = amt
-    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True, None
@@ -1192,7 +1148,6 @@ def settle_payable_row(row_index, settled_by=None):
     df.loc[row_index, "Status"] = "Paid"
     df.loc[row_index, "SettledAt"] = datetime.now().strftime("%Y-%m-%d")
     df.loc[row_index, "SettledBy"] = who
-    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True
@@ -1207,7 +1162,6 @@ def settle_payable_creditor_all(creditor_name, settled_by=None):
     df.loc[mask, "Status"] = "Paid"
     df.loc[mask, "SettledAt"] = datetime.now().strftime("%Y-%m-%d")
     df.loc[mask, "SettledBy"] = who
-    backup_before_overwrite(PAYABLE_FILE)
     df.to_excel(PAYABLE_FILE, index=False)
     sync_to_download(PAYABLE_FILE)
     return True
@@ -1227,7 +1181,6 @@ def clear_customer_bill(name, settled_by=None):
         df.loc[mask,'SettledAt'] = datetime.now().strftime("%Y-%m-%d")
         who = (settled_by or "").strip() or "—"
         df.loc[mask,'SettledBy'] = who
-        backup_before_overwrite(LEDGER_FILE)
         df.to_excel(LEDGER_FILE, index=False)
         sync_to_download(LEDGER_FILE)
         return True
@@ -1240,8 +1193,6 @@ def move_to_trash(row_index):
     row['DeletedAt'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     trash_df = pd.concat([trash_df, row], ignore_index=True)
     df = df.drop(row_index).reset_index(drop=True)
-    backup_before_overwrite(LEDGER_FILE)
-    backup_before_overwrite(TRASH_FILE)
     df.to_excel(LEDGER_FILE, index=False)
     trash_df.to_excel(TRASH_FILE, index=False)
     sync_to_download(LEDGER_FILE)
@@ -1263,8 +1214,6 @@ def restore_from_trash(trash_row_index):
     }
     ldf = pd.concat([ldf, pd.DataFrame([rec])], ignore_index=True)
     tdf = tdf.drop(trash_row_index).reset_index(drop=True)
-    backup_before_overwrite(LEDGER_FILE)
-    backup_before_overwrite(TRASH_FILE)
     ldf.to_excel(LEDGER_FILE, index=False)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(LEDGER_FILE)
@@ -1276,7 +1225,6 @@ def purge_trash_row(trash_row_index):
     if trash_row_index not in tdf.index:
         return False
     tdf = tdf.drop(trash_row_index).reset_index(drop=True)
-    backup_before_overwrite(TRASH_FILE)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(TRASH_FILE)
     return True
@@ -1302,8 +1250,6 @@ def restore_trash_batch(indices):
         })
     ldf = pd.concat([ldf, pd.DataFrame(recs)], ignore_index=True)
     tdf = tdf.drop(ix).reset_index(drop=True)
-    backup_before_overwrite(LEDGER_FILE)
-    backup_before_overwrite(TRASH_FILE)
     ldf.to_excel(LEDGER_FILE, index=False)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(LEDGER_FILE)
@@ -1316,7 +1262,6 @@ def purge_trash_batch(indices):
     if not ix:
         return False
     tdf = tdf.drop(ix).reset_index(drop=True)
-    backup_before_overwrite(TRASH_FILE)
     tdf.to_excel(TRASH_FILE, index=False)
     sync_to_download(TRASH_FILE)
     return True
@@ -1351,7 +1296,6 @@ def update_ledger_row(row_index, date_str, description, amount):
     df.loc[row_index, "Date"] = date_str
     df.loc[row_index, "Description"] = desc
     df.loc[row_index, "Amount"] = amt
-    backup_before_overwrite(LEDGER_FILE)
     df.to_excel(LEDGER_FILE, index=False)
     sync_to_download(LEDGER_FILE)
     return True, None
@@ -1582,10 +1526,10 @@ def _receipt_thermal58_print_head_json():
         "@page{margin:2mm 3mm;}"
         "@media screen{body{box-sizing:border-box;font-family:Pyidaungsu,'Myanmar Text','Noto Sans Myanmar',sans-serif;"
         "width:100%!important;max-width:420px;margin:0 auto!important;padding:12px 10px 180px!important;"
-        "font-size:18px;color:#000;line-height:1.55;-webkit-text-size-adjust:100%;}}"
+        "font-size:14px;color:#000;line-height:1.45;-webkit-text-size-adjust:100%;}}"
         "@media print{body{box-sizing:border-box;font-family:Pyidaungsu,'Myanmar Text','Noto Sans Myanmar',sans-serif;"
         "width:48mm!important;max-width:100%!important;margin:0 auto!important;padding:1mm 0.5mm!important;"
-        "font-size:16px;color:#000;line-height:1.5;"
+        "font-size:11px;color:#000;line-height:1.35;"
         "-webkit-print-color-adjust:exact;print-color-adjust:exact;}"
         ".no-print{display:none!important;}}"
     )
@@ -1596,6 +1540,7 @@ def _receipt_thermal58_print_head_json():
     )
 
 def _receipt_print_window_footer_json():
+    """ပြေစာ about:blank တဘ်အောက် — မိုဘိုင်း Chrome မှာ ပရင့်မီနူး မပေါ်တတ်သဖြင့် ခလုတ် + မီနူးလမ်းညွှန် (onclick သုံး၊ </script> မသုံး)"""
     bar = (
         '<div class="no-print" style="position:fixed;bottom:0;left:0;right:0;'
         "padding:10px 10px max(14px,env(safe-area-inset-bottom));"
@@ -1612,118 +1557,174 @@ def _receipt_print_window_footer_json():
     return json.dumps(bar)
 
 def _receipt_settlement_inner_html(customer_name, settle_day, line_items, sub_total, settled_by):
-    """line_items: [(description, amount_float), ...]"""
+    """line_items: [(description, amount_float), ...] — ၅၈မီလီ ထာမ်မယ်ပြေစာ"""
     parts = [
-        '<div style="text-align:center;font-weight:bold;font-size:21px;margin-bottom:6px;">🍚 ကိုကျော် ထမင်းဆိုင်</div>',
-        '<div style="text-align:center;font-size:18px;margin-bottom:10px;border-bottom:1px dashed #000;padding-bottom:5px;">ငွေရှင်းပြေစာ</div>',
-        f'<div style="font-size:16px;margin:4px 0;">ငွေရှင်းနေ့: {_he(settle_day)}</div>',
-        f'<div style="font-size:16px;margin:4px 0;">ဖောက်သည်: {_he(customer_name)}</div>',
-        '<div style="margin-top:8px;font-size:16px;font-weight:bold;">မှာယူမှုများ</div>',
-        '<table style="width:100%;border-collapse:collapse;margin-top:4px;table-layout:fixed;">',
+        '<div style="text-align:center;font-weight:bold;font-size:13px;margin-bottom:3px;">🍚 ကိုကျော် ထမင်းဆိုင်</div>',
+        '<div style="text-align:center;font-size:11px;margin-bottom:6px;border-bottom:1px dashed #000;padding-bottom:4px;">ငွေရှင်းပြေစာ</div>',
+        f'<div style="font-size:10px;margin:1px 0;">ငွေရှင်းနေ့: {_he(settle_day)}</div>',
+        f'<div style="font-size:10px;margin:1px 0;">ဖောက်သည်: {_he(customer_name)}</div>',
+        '<div style="margin-top:5px;font-size:10px;font-weight:bold;">မှာယူမှုများ</div>',
+        '<table style="width:100%;border-collapse:collapse;margin-top:2px;table-layout:fixed;">',
     ]
     for desc, amt in line_items:
         parts.append("<tr>")
         parts.append(
-            f'<td style="padding:5px 4px 5px 0;border-bottom:1px dotted #000;font-size:16px;word-break:break-word;vertical-align:top;width:58%;">{_he(desc)}</td>'
+            f'<td style="padding:2px 4px 2px 0;border-bottom:1px dotted #000;font-size:9px;word-break:break-word;vertical-align:top;width:62%;">{_he(desc)}</td>'
         )
         parts.append(
-            f'<td style="padding:5px 0;border-bottom:1px dotted #000;text-align:right;white-space:nowrap;font-size:16px;font-variant-numeric:tabular-nums;vertical-align:top;width:42%;">{_fmt_amount(amt)} Ks</td>'
+            f'<td style="padding:2px 0;border-bottom:1px dotted #000;text-align:right;white-space:nowrap;font-size:8px;vertical-align:top;width:38%;">{_fmt_amount(amt)} Ks</td>'
         )
         parts.append("</tr>")
     parts.append("</table>")
     parts.append(
-        f'<div style="margin-top:8px;font-size:19px;font-weight:bold;text-align:right;border-top:2px solid #000;padding-top:8px;">'
+        f'<div style="margin-top:6px;font-size:11px;font-weight:bold;text-align:right;border-top:2px solid #000;padding-top:4px;">'
         f"စုစုပေါင်း: {_fmt_amount(sub_total)} Ks</div>"
     )
-    parts.append(f'<div style="margin-top:8px;font-size:15px;">ငွေရှင်းချသူ: {_he(settled_by)}</div>')
+    parts.append(f'<div style="margin-top:4px;font-size:9px;">ငွေရှင်းချသူ: {_he(settled_by)}</div>')
     parts.append(
-        f'<div style="text-align:center;margin-top:12px;font-size:14px;color:#000;">'
+        f'<div style="text-align:center;margin-top:8px;font-size:8px;color:#000;">'
         f"{_he(datetime.now().strftime('%Y-%m-%d %H:%M'))}</div>"
     )
-    parts.append('<div style="text-align:center;margin-top:8px;font-size:16px;">ကျေးဇူးတင်ပါသည်</div>')
+    parts.append('<div style="text-align:center;margin-top:4px;font-size:10px;">ကျေးဇူးတင်ပါသည်</div>')
     return "".join(parts)
 
-def _safe_receipt_download_basename(customer: str, day: str) -> str:
-    h = hashlib.md5(str(customer).encode("utf-8")).hexdigest()[:8]
-    d = re.sub(r"[^\d\-]", "", str(day))[:10] or "day"
-    return f"receipt_{h}_{d}"
+def _receipt_settlement_plain_text(customer_name, settle_day, line_items, sub_total, settled_by):
+    """RawBT / မျှဝေမှု အတွက် စာသား ပြေစာ (HTML မဟုတ်)"""
+    lines = [
+        "ကိုကျော် ထမင်းဆိုင်",
+        "ငွေရှင်းပြေစာ",
+        f"ငွေရှင်းနေ့: {settle_day}",
+        f"ဖောက်သည်: {customer_name}",
+        "—",
+    ]
+    for desc, amt in line_items:
+        lines.append(f"{desc}  {_fmt_amount(amt)} Ks")
+    lines.append(f"စုစုပေါင်း: {_fmt_amount(sub_total)} Ks")
+    lines.append(f"ငွေရှင်းချသူ: {settled_by}")
+    lines.append(datetime.now().strftime("%Y-%m-%d %H:%M"))
+    lines.append("ကျေးဇူးတင်ပါသည်")
+    return "\n".join(lines)
 
-def _receipt_html_file_bytes(html_doc: str) -> bytes:
-    return html_doc.encode("utf-8")
 
-def _ledger_receipt_view_key(view: dict) -> str:
-    s = f"{view.get('customer')}|{view.get('day')}|{view.get('total')}|{repr(view.get('lines'))}"
-    return hashlib.md5(s.encode("utf-8")).hexdigest()[:16]
+def _receipt_settlement_plain_text_english(customer_name, settle_day, line_items, sub_total, settled_by):
+    """English plain text version for thermal printing and avoid charset issues."""
+    lines = [
+        "KO KYAW RICE SHOP",
+        "Payment Receipt",
+        f"Date: {settle_day}",
+        f"Customer: {customer_name}",
+        "----",
+    ]
+    for desc, amt in line_items:
+        lines.append(f"{desc}  {_fmt_amount(amt)} Ks")
+    lines.append(f"Total: {_fmt_amount(sub_total)} Ks")
+    lines.append(f"Settled by: {settled_by}")
+    lines.append(datetime.now().strftime("%Y-%m-%d %H:%M"))
+    lines.append("Thank you")
+    return "\n".join(lines)
 
-def _receipt_shareable_html_document(inner_body: str, title: str = "ငွေရှင်းပြေစာ") -> str:
-    t = html.escape(str(title), quote=True)
-    return (
-        "<!DOCTYPE html>\n<html lang=\"my\">\n<head>\n"
-        '<meta charset="utf-8"/>\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1"/>\n'
-        f"<title>{t}</title>\n"
-        "<style>\n"
-        "body { box-sizing: border-box; margin: 0 auto; padding: 10px 6px; max-width: 420px;\n"
-        "  font-family: 'Pyidaungsu','Myanmar Text','Noto Sans Myanmar','Padauk',sans-serif;\n"
-        "  font-size: 16px; color: #111; line-height: 1.5; background: #fff; }\n"
-        "</style>\n</head>\n<body>\n"
-        + inner_body
-        + "\n</body>\n</html>"
+
+def _receipt_settlement_inner_html_english(customer_name, settle_day, line_items, sub_total, settled_by):
+    """English receipt HTML (narrow thermal style)"""
+    parts = [
+        '<div style="text-align:center;font-weight:bold;font-size:13px;margin-bottom:3px;">KO KYAW RICE SHOP</div>',
+        '<div style="text-align:center;font-size:11px;margin-bottom:6px;border-bottom:1px dashed #000;padding-bottom:4px;">Payment Receipt</div>',
+        f'<div style="font-size:10px;margin:1px 0;">Date: {_he(settle_day)}</div>',
+        f'<div style="font-size:10px;margin:1px 0;">Customer: {_he(customer_name)}</div>',
+        '<div style="margin-top:5px;font-size:10px;font-weight:bold;">Items</div>',
+        '<table style="width:100%;border-collapse:collapse;margin-top:2px;table-layout:fixed;">',
+    ]
+    for desc, amt in line_items:
+        parts.append("<tr>")
+        parts.append(
+            f'<td style="padding:2px 4px 2px 0;border-bottom:1px dotted #000;font-size:9px;word-break:break-word;vertical-align:top;width:62%;">{_he(desc)}</td>'
+        )
+        parts.append(
+            f'<td style="padding:2px 0;border-bottom:1px dotted #000;text-align:right;white-space:nowrap;font-size:8px;vertical-align:top;width:38%;">{_fmt_amount(amt)} Ks</td>'
+        )
+        parts.append("</tr>")
+    parts.append("</table>")
+    parts.append(
+        f'<div style="margin-top:6px;font-size:11px;font-weight:bold;text-align:right;border-top:2px solid #000;padding-top:4px;">Total: {_fmt_amount(sub_total)} Ks</div>'
     )
+    parts.append(f'<div style="margin-top:4px;font-size:9px;">Settled by: {_he(settled_by)}</div>')
+    parts.append(
+        f'<div style="text-align:center;margin-top:8px;font-size:8px;color:#000;">{_he(datetime.now().strftime("%Y-%m-%d %H:%M"))}</div>'
+    )
+    parts.append('<div style="text-align:center;margin-top:4px;font-size:10px;">Thank you</div>')
+    return "".join(parts)
 
-def _receipt_png_from_html(html_doc: str, width: int = 420) -> bytes | None:
+
+def _ascii_only_printable(s: str, max_len: int = 48) -> str:
+    """ထာမ်မယ် ESC/POS — ASCII printable သာ (မြန်မာ မပါရင် '-')"""
+    t = "".join(c for c in str(s) if 32 <= ord(c) < 127)
+    return (t.strip() or "-")[:max_len]
+
+def _fmt_amount_thermal(v):
+    """ထာမ်မယ် — ကော်မာ မသုံး၊ နံပါတ်သာ (code page မှားခြင်းလျှော့ရန်)"""
     try:
-        from html2image import Html2Image
-    except ImportError:
-        return None
-    for br in ("chrome", "edge"):
-        try:
-            with tempfile.TemporaryDirectory() as td:
-                hti = Html2Image(browser=br, output_path=td, size=(width, 4000))
-                hti.screenshot(html_str=html_doc, save_as="receipt.png", size=(width, 4000))
-                p = os.path.join(td, "receipt.png")
-                if os.path.isfile(p):
-                    with open(p, "rb") as f:
-                        data = f.read()
-                    if len(data) > 80:
-                        return data
-        except Exception:
-            continue
-    return None
+        if v is None or pd.isna(v):
+            return "0"
+        x = float(v)
+        if math.isnan(x):
+            return "0"
+        return str(int(round(x)))
+    except (TypeError, ValueError):
+        return "0"
 
-def render_settlement_receipt_browser_print(html_full_doc: str, component_id: str):
-    safe_id = re.sub(r"[^a-zA-Z0-9_]", "_", component_id)[:48]
-    auto_html = html_full_doc.replace(
-        "</body>",
-        (
-            '<div style="position:fixed;bottom:10px;left:10px;right:10px;z-index:99999;text-align:center;">'
-            '<button onclick="window.print()" '
-            'style="padding:12px 18px;border:none;border-radius:10px;background:#b91c1c;color:#fff;font-weight:700;">'
-            "🖨️ Print</button></div>"
-            "<script>setTimeout(function(){try{window.print();}catch(e){}},700);</script></body>"
-        ),
-    )
-    href = "data:text/html;charset=utf-8;base64," + base64.b64encode(auto_html.encode("utf-8")).decode("ascii")
-    _href = html.escape(href, quote=True)
-    st.markdown(
-        f'<a id="setpr_{safe_id}" href="{_href}" target="_blank" '
-        'style="display:inline-block;padding:14px 22px;font-size:16px;font-weight:700;border:none;'
-        'border-radius:12px;background:#b91c1c;color:#fff !important;text-decoration:none;">'
-        "🖨️ ဤနေရာမှ ပရင့်ထုတ်မည်</a>",
-        unsafe_allow_html=True,
-    )
-    st.caption("Tab အသစ်ဖွင့်မလာရင် browser popup permission ကို Allow လုပ်ပြီး ထပ်နှိပ်ပါ။")
+def _receipt_settlement_plain_text_thermal_ascii(
+    customer_name, settle_day, line_items, sub_total, settled_by
+):
+    """
+    RawBT / ထာမ်မယ် — ဘိုက် 0-127 သာ (ကော်မာ/Unicode မသုံး)။
+    မြန်မာ UTF-8 ပို့ရင် /// စသည် ထွက်နိုင်သည်။
+    """
+    cref = hashlib.md5(str(customer_name).encode("utf-8")).hexdigest()[:10]
+    lines = [
+        "KO KYAW RICE SHOP",
+        "SETTLEMENT",
+        "Date " + str(settle_day),
+        "Ref " + cref,
+        "====",
+    ]
+    for i, (desc, amt) in enumerate(line_items, 1):
+        d = _ascii_only_printable(desc, 28)
+        if d == "-":
+            d = "L" + str(i)
+        amt_s = _fmt_amount_thermal(amt)
+        lines.append(str(i) + ". " + d + "  " + amt_s)
+    lines.append("====")
+    lines.append("TOTAL " + _fmt_amount_thermal(sub_total))
+    who = _ascii_only_printable(settled_by, 20)
+    if who == "-":
+        who = "staff"
+    lines.append("By " + who)
+    lines.append(datetime.now().strftime("%Y-%m-%d %H:%M"))
+    lines.append("THANK YOU")
+    body = "\r\n".join(lines)
+    clean = "".join(c for c in body if ord(c) < 128)
+    return clean
 
-def _rawbt_uri_from_png_bytes(png_bytes: bytes | None, max_uri_chars: int = 800_000) -> str | None:
-    if not png_bytes:
-        return None
-    b64 = base64.b64encode(png_bytes).decode("ascii")
-    uri = "rawbt:base64," + b64
-    if len(uri) > max_uri_chars:
+def _safe_receipt_filename(customer: str, day: str) -> str:
+    """ဒေါင်းလုဒ် ဖိုင်အမည် — OS တားမြစ်အက္ခရာများ ဖယ်သည်"""
+    base = re.sub(r'[\s<>:"/\\\\|?*\x00-\x1f]+', "_", str(customer)).strip("._")[:48]
+    if not base:
+        base = "receipt"
+    return f"{base}_{day}.txt"
+
+def _rawbt_uri_from_plain_text(txt: str, max_body_chars: int = 1800):
+    """Android RawBT အက်ပ် — rawbt: စာကြောင်း (အရှည်ကန့်သတ်)"""
+    t = (txt or "").strip()
+    if len(t) > max_body_chars:
+        t = t[: max_body_chars - 20].rstrip() + "\n...(truncated)"
+    q = quote(t, safe="")
+    uri = "rawbt:" + q
+    if len(uri) > 7000:
         return None
     return uri
 
 def render_bluetooth_receipt_print_button(button_id: str, inner_body_html: str):
+    """ပရင့်ဒိုင်ယလော့ — စနစ်ပရင့်မီနူးမှ ချိတ်ထားသော ထာမ်မယ် ရွေးထုတ်နိုင်"""
     inner_json = json.dumps(inner_body_html)
     head_json = _receipt_thermal58_print_head_json()
     foot_json = _receipt_print_window_footer_json()
@@ -1784,6 +1785,75 @@ def render_bluetooth_receipt_print_button(button_id: str, inner_body_html: str):
 </script>
         """,
         height=175,
+    )
+
+def render_receipt_auto_print_on_load(inner_body_html: str, run_key: str):
+    """ငွေရှင်းပြီး — မိုဘိုင်း၌ iframe + တစ်ချက်နှိပ်ချိန်နှင့် print() ချိတ်ဆက်ရန်"""
+    inner_json = json.dumps(inner_body_html)
+    head_json = _receipt_thermal58_print_head_json()
+    foot_json = _receipt_print_window_footer_json()
+    safe_k = re.sub(r"[^a-zA-Z0-9_]", "_", run_key)[:40]
+    components.html(
+        f"""
+<button type="button" id="doprint_{safe_k}" style="width:100%;padding:14px 16px;font-size:15px;font-weight:600;border-radius:10px;border:none;background:#c62828;color:#fff;cursor:pointer;margin-bottom:6px;">
+  🖨️ ပရင့်မီနူး ဖွင့်မည် (အရင်နှိပ်ပါ)
+</button>
+<button type="button" id="doprev_{safe_k}" style="width:100%;padding:8px 12px;font-size:13px;border-radius:8px;border:1px solid #94a3b8;background:#f8fafc;color:#334155;cursor:pointer;margin-bottom:8px;">
+  ပြေစာတဘ်ဖွင့် ကြည့်မည်
+</button>
+<p id="hint_{safe_k}" style="font-size:12px;color:#64748b;margin:0;line-height:1.45;">
+  အပေါ်အနီခလုတ်က ပရင့်မီနူးကို တိုက်ရိုက်ခေါ်ပါသည်။ မပေါ်ရင် အောက်ခလုတ်ဖြင့် တဘ်ဖွင့်၍ <b>⋮ → Print</b> သုံးပါ။
+</p>
+<button type="button" id="retry_{safe_k}" style="padding:8px 12px;font-size:12px;border-radius:6px;cursor:pointer;display:none;margin-top:8px;">ပြန်စမ်းမည်</button>
+<script>
+(function() {{
+  var innerHtml = {inner_json};
+  var docHead = {head_json};
+  var foot = {foot_json};
+  function buildDoc() {{
+    return "<!DOCTYPE html><html><head>" + docHead + "</head><body style=\\"padding-bottom:170px;margin:0;\\">" + innerHtml + foot + "</body></html>";
+  }}
+  function printViaIframe() {{
+    var iframe = document.createElement("iframe");
+    iframe.setAttribute("title", "receipt-print");
+    iframe.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;border:0;opacity:0;z-index:2147483646;pointer-events:none;";
+    document.body.appendChild(iframe);
+    var d = iframe.contentDocument || iframe.contentWindow.document;
+    d.open();
+    d.write(buildDoc());
+    d.close();
+    var win = iframe.contentWindow;
+    setTimeout(function() {{
+      try {{ win.focus(); win.print(); }} catch(e) {{}}
+    }}, 450);
+    setTimeout(function() {{
+      try {{ if (iframe.parentNode) iframe.parentNode.removeChild(iframe); }} catch(e) {{}}
+    }}, 120000);
+  }}
+  function openTab() {{
+    var w = window.open("", "_blank");
+    if (!w) {{
+      var h = document.getElementById("hint_{safe_k}");
+      if (h) h.innerHTML = "ဝင်းဒိုး မဖွင့်နိုင်ပါ — ပေါ့ပ်အပ်ပိတ်မထားပါနှင့်။";
+      var r = document.getElementById("retry_{safe_k}");
+      if (r) {{ r.style.display = "inline-block"; }}
+      return;
+    }}
+    w.document.open();
+    w.document.write(buildDoc());
+    w.document.close();
+    w.focus();
+  }}
+  var main = document.getElementById("doprint_{safe_k}");
+  if (main) main.addEventListener("click", printViaIframe);
+  var pv = document.getElementById("doprev_{safe_k}");
+  if (pv) pv.addEventListener("click", openTab);
+  var rbtn = document.getElementById("retry_{safe_k}");
+  if (rbtn) rbtn.addEventListener("click", openTab);
+}})();
+</script>
+        """,
+        height=240,
     )
 
 def show_recycle_bin():
@@ -1899,7 +1969,7 @@ def show_settlement_records_recycle_style(df_src, *, section_title="💵 ငွ�
         st.caption(
             "Recycle Bin နည်းတူ **ငွေရှင်းသည့်နေ့** ပြီးမှ **ဖောက်သည် အမည် (စာပွဲတစ်ခုချင်း)** ဖြင့် အုပ်စုဖွဲ့ထားပါသည်။ "
             "**ငွေရှင်းချသူ** မှာ ဝန်ထမ်းအမည် (သို့မဟုတ် Agent) ဖြစ်သည်။ "
-            "ဖောက်သည်တစ်ဦးချင်းအောက် **🖨️ ငွေရှင်းပြေစာ ပရင့်ထုတ်မည်** နှင့် **RawBT (ပုံ)** ဖြင့် ထုတ်နိုင်ပါသည်။"
+            "ဖောက်သည်တစ်ဦးချင်းအောက် **🖨️ ငွေရှင်းပြေစာ ပရင့်ထုတ်မည်** ဖြင့် Bluetooth ပရင်တာ (သို့) စာရွက်သို့ ထုတ်နိုင်ပါသည်။"
         )
 
     for day in days:
@@ -1959,42 +2029,6 @@ def show_settlement_records_recycle_style(df_src, *, section_title="💵 ငွ�
                     str(name), str(day), line_items, sub_total, settled_by_str
                 )
                 render_bluetooth_receipt_print_button(_print_id, _recv_html)
-                _dash_full = _receipt_shareable_html_document(_recv_html, title="ငွေရှင်းပြေစာ")
-                _dash_dl = _safe_receipt_download_basename(str(name), str(day))
-                _dash_png_k = f"_dash_receipt_png_{_print_id}"
-                with st.expander("🖼️ RawBT (ပုံ — မြန်မာစာ မှန်ထွက်)", expanded=False):
-                    st.caption("ထာမ်မယ် စာသား mode မှာ မြန်မာစာ ပျက်နိုင်သဖြင့် ပုံကို RawBT သို့ ပို့ရန်။")
-                    if _dash_png_k not in st.session_state:
-                        if st.button("ပုံ ဖန်တီးမည်", key=f"dg_{_print_id}"):
-                            with st.spinner("ပုံရိပ်အဖြစ် ပြောင်းလဲနေပါသည်…"):
-                                st.session_state[_dash_png_k] = _receipt_png_from_html(_dash_full)
-                            st.rerun()
-                    else:
-                        _dpng = st.session_state[_dash_png_k]
-                        if _dpng:
-                            _duri = _rawbt_uri_from_png_bytes(_dpng)
-                            if _duri:
-                                st.markdown(
-                                    f'<p><a href="{html.escape(_duri, quote=True)}" target="_blank" '
-                                    'style="display:inline-block;padding:10px 16px;background:#1565c0;'
-                                    'color:#fff !important;border-radius:10px;text-decoration:none;font-weight:600;">'
-                                    "📲 RawBT (ပုံ) ဖြင့် ထုတ်မည်</a></p>",
-                                    unsafe_allow_html=True,
-                                )
-                            else:
-                                st.caption("လင့်ရှည်လွန်းပါသည် — PNG ဒေါင်းပြီး Share သုံးပါ။")
-                            st.download_button(
-                                "🖼️ PNG ဒေါင်း",
-                                data=_dpng,
-                                file_name=f"{_dash_dl}.png",
-                                mime="image/png",
-                                key=f"ddlpng_{_print_id}",
-                            )
-                        else:
-                            st.warning("PNG မဖန်တီးနိုင်ပါ။")
-                        if st.button("ပုံ ပြန်ဖန်တီးမည်", key=f"dgr_{_print_id}"):
-                            st.session_state.pop(_dash_png_k, None)
-                            st.rerun()
                 st.divider()
 
 def show_unpaid_glance_summary(df_src, *, title, caption=None):
@@ -2651,7 +2685,7 @@ def show_ledger_display():
     st.caption(
         "အပေါ်ဇယားမှာ ဖောက်သည်တစ်ဦးချင်း စုစုပေါင်း မြင်ရပါသည်။ အောက်က နာမည်ကို နှိပ်မှ ဇယားကွက်နဲ့ အသေးစိတ် ပေါ်ပါသည်။ "
         "ဇယားအောက်က ✏️ သည် အတန်းနံပါတ် (#) နှင့် တူညီသည် — နှိပ်မှ ပြင်/ဖျက်နိုင်သည်။ "
-        "**✅ ငွေရှင်းမည်** နှိပ်လိုက်ပါက ပြေစာ ထုတ်မလား မေးပါမည် — ပြေစာ ရွေးမှ Browser ပရင့် သို့ RawBT (ပုံ) ရွေးနိုင်ပါသည်။"
+        "**✅ ငွေရှင်းမည်** နှိပ်လိုက်ပါက ပြေစာ ထုတ်မလား မေးပါမည် — **ပြေစာ ထုတ်မည်** ရွေးမှ ပရင့်ဝင်းဒိုး အလိုအလျောက် ပွင့်ပါမည်။"
     )
 
     _flash = st.session_state.pop("_ledger_settle_flash", None)
@@ -2665,7 +2699,9 @@ def show_ledger_display():
         st.markdown("---")
         st.markdown(f"##### 🧾 {_he(_pc)} — ပြေစာ ထုတ်မလား?")
         st.caption(
-            "**ပြေစာ ထုတ်မည်** = ငွေရှင်းပြီး ပရင့်/RawBT ရွေးချယ်။ **မထုတ်ပါ** = ငွေရှင်းပြီး ပြေစာမပြပါ။ **ပြန်ရွေး** = မရှင်းသေး။"
+            "အောက်တွင် ရွေးပါ။ **ပြေစာ ထုတ်မည်** = ငွေရှင်းပြီး ပရင့်ဝင်းဒိုး ပွင့်မည်။ "
+            "**ပြေစာ မထုတ်ပါ** = ငွေရှင်းပြီး ပရင့်မဖွင့်ပါ။ **ပြန်ရွေးမည်** = ငွေရှင်းခြင်း မလုပ်သေးပါ။ "
+            "စက်မချိတ်ခင် စမ်းရင် — ပရင့်မှာ **Microsoft Print to PDF** ရွေးပြီး PDF ကြည့်၊ သို့မဟုတ် ပုံကြည့်ပြီး **Cancel** နှိပ်လို့ရပါတယ်။ ငွေရှင်းမှု ကတည်းက သိမ်းပြီးသားပါ။"
         )
         y, n, x = st.columns(3)
         with y:
@@ -2705,91 +2741,82 @@ def show_ledger_display():
             if st.button("← ငွေရှင်းမလုပ် (ပြန်ရွေးမည်)", key=f"lsp_x_{_pgk}"):
                 st.session_state.pop("_ledger_settle_prompt", None)
                 st.rerun()
+        with st.expander("📱 ပုံလို Bluetooth စက်စာရင်း အက်ပ်ထဲမှာ မပေါ်ဘူး လား? (ဖတ်ပါ)", expanded=False):
+            st.markdown(
+                "ပို့ထားတဲ့ အက်ပ်က **Android native** — စနစ်က Bluetooth ပရင်တာတွေကို တိုက်ရိုက် ရှာပြီး ရွေးခိုင်းနိုင်ပါတယ်။ "
+                "**AdminSeller (Streamlit)** က ဘရောက်ဆာထဲမှာ အလုပ်လုပ်ပါတယ်။ ဘရောက်ဆာက လုံခြုံရေးကြောင့် "
+                "ဝက်ဘ်စာမျက်နှာကနေ **ချိတ်ထားတဲ့ ပရင်တာအမည်တွေကို ရေဒီယိုစာရင်းအဖြစ် မပြနိုင်ပါ**။ "
+                "ဒါကြောင့် **ပြေစာ ထုတ်မည်** နှိပ်ပြီးနောက် ပွင့်လာတဲ့ ပရင့်မီနူး (စနစ်ပရင့် စာမျက်နှာ) မှာ **သင်ချိတ်ထားသော ပရင်တာ** ကို ရွေးပြီး **Print** နှိပ်ရပါမယ်။"
+            )
+            st.markdown(
+                "**မိုဘ (Chrome):** ပရင့်မီနူးမှာ ပရင်တာ / **ပိုများ** နှိပ်ပြီး ချိတ်ထားသော Bluetooth ပရင်တာ သို့မဟုတ် ထုတ်လုပ်သူပေးသော ပရင့်ဝန်ဆောင်မှု ရွေးပါ။ "
+                "**Windows:** ဆက်တင်များမှ ပရင်တာ ထည့်ပြီး ချိတ်ထားပါ၊ ပရင့်မီနူးမှာ **Destination** မှ သင့်ပရင်တာကို ရွေးပါ။"
+            )
         st.markdown("---")
 
-    _incoming = st.session_state.pop("_ledger_settle_print", None)
-    if _incoming:
-        st.session_state["_ledger_receipt_view"] = _incoming
-
-    _view = st.session_state.get("_ledger_receipt_view")
-    if _view:
+    _sp = st.session_state.pop("_ledger_settle_print", None)
+    if _sp:
         try:
-            _vk = _ledger_receipt_view_key(_view)
-            _cust = str(_view["customer"])
-            _day = str(_view["day"])
-            _lines = list(_view["lines"])
-            _tot = float(_view["total"])
-            _by = str(_view["by"])
-            st.success(f"✅ {_he(_cust)} ငွေရှင်းပြီးပါပြီ။")
-            _inner = _receipt_settlement_inner_html(_cust, _day, _lines, _tot, _by)
-            _full = _receipt_shareable_html_document(_inner, title="ငွေရှင်းပြေစာ")
-            _dl_base = _safe_receipt_download_basename(_cust, _day)
-            with st.expander("👁 ပြေစာ ကြည့်မည်", expanded=True):
-                components.html(_full, height=480, scrolling=True)
-            _print_mode = st.radio(
-                "ဘာနဲ့ထုတ်မလဲ",
-                options=["add_print", "rawbt_image"],
-                horizontal=True,
-                key=f"ledger_print_mode_img_{_vk}",
-                format_func=lambda k: (
-                    "🖨️ ပရင့် (Browser)"
-                    if k == "add_print"
-                    else "🖼️ RawBT (ပုံ — မြန်မာစာ မှန်ထွက်)"
-                ),
+            _rk = hashlib.md5(
+                f"{_sp['customer']}|{_sp['day']}|{_sp['total']}|{time.time()}".encode("utf-8")
+            ).hexdigest()[:14]
+            use_english = st.checkbox(
+                "🅰️ Print this receipt in English (ASCII-compatible, avoid Unicode issues)",
+                value=True,
+                key=f"receipt_lang_{_rk}",
             )
-            if _print_mode == "add_print":
-                render_settlement_receipt_browser_print(_full, f"ledger_{_vk}")
+            if use_english:
+                _inner = _receipt_settlement_inner_html_english(
+                    str(_sp["customer"]),
+                    str(_sp["day"]),
+                    list(_sp["lines"]),
+                    float(_sp["total"]),
+                    str(_sp["by"]),
+                )
             else:
-                _png_key = f"_ledger_receipt_png_{_vk}"
-                if _png_key not in st.session_state:
-                    with st.spinner("ပုံရိပ်အဖြစ် ပြောင်းလဲနေပါသည်…"):
-                        st.session_state[_png_key] = _receipt_png_from_html(_full)
-                _png = st.session_state.get(_png_key)
-                if _png is None and st.button("PNG ပြန်ဖန်တီးမည်", key=f"ledger_png_retry_{_vk}"):
-                    st.session_state.pop(_png_key, None)
-                    st.rerun()
-                if _png:
-                    _rawbt_img = _rawbt_uri_from_png_bytes(_png)
-                    if _rawbt_img:
-                        _href_img = html.escape(_rawbt_img, quote=True)
-                        st.markdown(
-                            f'<p style="margin:10px 0 8px 0;"><a href="{_href_img}" target="_blank" '
-                            'style="display:inline-block;padding:14px 22px;background:#1565c0;color:#fff !important;'
-                            'border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">'
-                            "📲 RawBT (ပုံ) ဖြင့် ထုတ်မည်</a></p>",
-                            unsafe_allow_html=True,
-                        )
-                        st.caption("လင့်ကို နှိပ်ပြီး RawBT အက်ပ်ဖြင့် ပရင့်ပါ။ မဖွင့်ရင် PNG ဒေါင်းပြီး Share သုံးပါ။")
-                    else:
-                        st.warning(
-                            "ပြေစာပုံက ကြီးလွန်းသဖြင့် RawBT တိုက်ရိုက်လင့် မဖန်တီးနိုင်ပါ — PNG ဒေါင်းပြီး မျှဝေပါ။"
-                        )
-                    st.download_button(
-                        label="🖼️ PNG ဒေါင်း (RawBT သို့ Share)",
-                        data=_png,
-                        file_name=f"{_dl_base}.png",
-                        mime="image/png",
-                        key=f"dlpng_{_vk}",
-                        use_container_width=True,
+                _inner = _receipt_settlement_inner_html(
+                    str(_sp["customer"]),
+                    str(_sp["day"]),
+                    list(_sp["lines"]),
+                    float(_sp["total"]),
+                    str(_sp["by"]),
+                )
+            st.success(f"✅ {_he(_sp['customer'])} ငွေရှင်းပြီးပါပြီ။")
+            st.info(
+                "အောက်က **ပရင့်မီနူး ဖွင့်မည်** ကို နှိပ်ပါ။ မပေါ်ရင် **ပြေစာတဘ်ဖွင့် ကြည့်မည်** နှိပ်ပြီး "
+                "ထိုတဘ်တွင် **⋮ → Print** သုံးပါ။"
+            )
+            _plain_thermal = _receipt_settlement_plain_text_thermal_ascii(
+                str(_sp["customer"]),
+                str(_sp["day"]),
+                list(_sp["lines"]),
+                float(_sp["total"]),
+                str(_sp["by"]),
+            )
+            with st.expander("📲 Browser မရရင် RawBT fallback", expanded=False):
+                st.caption("B58G လို thermal printer တွေအတွက် RawBT text mode ကို backup အနေနဲ့ သုံးနိုင်ပါတယ်။")
+                _rawbt = _rawbt_uri_from_plain_text(_plain_thermal)
+                if _rawbt:
+                    _href = html.escape(_rawbt, quote=True)
+                    st.markdown(
+                        f'<a href="{_href}" style="display:inline-block;padding:10px 16px;background:#1565c0;'
+                        'color:#fff !important;border-radius:10px;text-decoration:none;font-weight:600;">'
+                        "📲 RawBT ဖြင့် ပရင့်ထုတ်မည်</a>",
+                        unsafe_allow_html=True,
                     )
                 else:
-                    st.warning(
-                        "PNG မဖန်တီးနိုင်ပါ — ဒေသတွင်း Chrome/Edge သို့ Cloud တွင် `packages.txt` ဖြင့် chromium ထည့်စစ်ပါ။"
-                    )
+                    st.warning("RawBT လင့် မဖန်တီးနိုင်ပါ (ပြေစာရှည်လွန်းနိုင်သည်)။")
                 st.download_button(
-                    label="📄 HTML ဒေါင်း",
-                    data=_receipt_html_file_bytes(_full),
-                    file_name=f"{_dl_base}.html",
-                    mime="text/html",
-                    key=f"dlhtml_{_vk}",
-                    use_container_width=True,
+                    label="⬇️ RawBT အတွက် ASCII .txt",
+                    data=_plain_thermal.encode("ascii", errors="strict"),
+                    file_name=f"receipt_thermal_{str(_sp['day'])}.txt",
+                    mime="text/plain; charset=us-ascii",
+                    key=f"rcptdlth_{_rk}",
+                    help="RawBT မှာ Text/Raw mode ရွေးပြီး ဖွင့်သုတ်ပါ။",
                 )
-            if st.button("ပြေစာ ပိတ်မည်", key=f"ledger_rec_close_{_vk}"):
-                st.session_state.pop("_ledger_receipt_view", None)
-                st.session_state.pop(f"_ledger_receipt_png_{_vk}", None)
-                st.rerun()
+            render_receipt_auto_print_on_load(_inner, _rk)
         except Exception as _e:
-            st.warning(f"ပြေစာ ပြသမှု မအောင်မြင်ပါ။ ({_e})")
+            st.warning(f"ပြေစာပရင့် မဖွင့်နိုင်ပါ — Dashboard မှ ငွေရှင်းမှတ်တမ်းက ပရင့်ပြန်နိုင်ပါသည်။ ({_e})")
 
     df_ledger = pd.read_excel(LEDGER_FILE)
     today = datetime.now().strftime("%Y-%m-%d")
@@ -2852,21 +2879,22 @@ def show_ledger_display():
                     ),
                     unsafe_allow_html=True,
                 )
-                st.caption("✏️ = ထိုဖောက်သည်အတွက် အတန်းနံပါတ် (#) ထည့်ပြီး ပြင်/ဖျက်နိုင်သည်။")
-                c_num, c_btn = st.columns([2, 1])
+                st.caption("အောက်မှာ # အတန်းကို ရွေးပြီး ✏️ တစ်ခုပဲ နှိပ်၍ ပြင်/ဖျက်နိုင်သည်။")
+                c_num, c_btn = st.columns([3, 1])
                 with c_num:
                     edit_row_no = st.number_input(
-                        "ပြင်မည့် အတန်း (#)",
+                        "ပြင်/ဖျက်မည့် အတန်း (#)",
                         min_value=1,
                         max_value=len(row_list),
                         step=1,
-                        key=f"led_edit_row_{gk}",
+                        value=1,
+                        key=f"led_edit_row_single_{gk}",
                     )
                 with c_btn:
-                    if st.button("✏️ ဈေးပြင်မည်", key=f"led_edit_btn_{gk}", use_container_width=True):
+                    if st.button("✏️", key=f"led_edit_btn_single_{gk}", use_container_width=True):
                         try:
-                            _, sel_row = row_list[int(edit_row_no) - 1]
-                            st.session_state.ledger_edit_idx = int(sel_row.name)
+                            sel_idx, _ = row_list[int(edit_row_no) - 1]
+                            st.session_state.ledger_edit_idx = int(sel_idx)
                         except Exception:
                             st.session_state.ledger_edit_idx = None
                         st.rerun()
@@ -3249,15 +3277,6 @@ def show_admin_settings():
         "အသုံးပြုသူများစွာ တစ်ချိန်တည်း ရေးမယ်ဆို SQLite/DB သို့ ပြောင်းသင့်ပါသည်။"
     )
 
-    _bak_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backups")
-    with st.expander("💾 ဒေတာ ကော်ပီ (မပျက်အောင်)", expanded=False):
-        st.markdown(
-            f"စာရင်း/မှာယူမှု **ပြင်တိုင်း သို့မဟုတ် သိမ်းတိုင်း** ယခင် ဖိုင်ကို အလိုအလျောက် ကော်ပီယူပါသည်။\n\n"
-            f"- **နေ့လိုက် snapshot:** `{_bak_root}\\` အောက်က `YYYY-MM-DD` ဖိုလ်ဒါ\n"
-            f"- **မရေးမီ ကော်ပီ (နောက်ဆုံး ၃၀ ကြိမ်/ဖိုင်):** `{_bak_root}\\autosave\\ledger_data.xlsx\\` စသည်\n\n"
-            "ပြန်သုံးချင်ရင် — autosave ထဲက နောက်ဆုံး `ledger_data.xlsx` ကို project ဖိုလ်ဒါရှိ `ledger_data.xlsx` အပေါ် ကော်ပီထိုးပါ။"
-        )
-
 # ══════════════════════════════════════════════════════════════════
 #  MAIN APP
 # ══════════════════════════════════════════════════════════════════
@@ -3516,15 +3535,6 @@ section.main [data-testid="stRadio"] label,
 section.main [data-baseweb="radio"] label {
   color: #e2e8f0 !important;
 }
-/* အောက်ခြေ icon navigation — မြင်သာအောင် ဖျော့ဖျော့ background */
-section.main [data-testid="stRadio"] [data-baseweb="radio"] label {
-  background-color: rgba(241, 245, 249, 0.22) !important;
-  border: 1px solid rgba(148, 163, 184, 0.5) !important;
-  border-radius: 10px !important;
-  padding: 0.4rem 0.55rem !important;
-  min-width: 2.4rem !important;
-  justify-content: center !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -3570,6 +3580,7 @@ else:
             st.info("🔧 Admin Mode - အပြည့်အစုံ စီမံနိုင်သည်")
 
         st.divider()
+        st.markdown("##### ဘယ်ဘက် မီနူး")
         _nav_admin = [
             "🤖 Agent",
             "📊 Dashboard",
@@ -3587,12 +3598,6 @@ else:
             "📋 Ledger",
         ]
         _labels = _nav_admin if st.session_state.user['role'] == 'admin' else _nav_cashier
-
-        # bottom icon-nav ကနေ လာတဲ့ target ကို radio မဖွင့်ခင် set လုပ်
-        _nav_target = st.session_state.pop("_nav_target_page", None)
-        if _nav_target in _labels:
-            st.session_state["main_nav_page"] = _nav_target
-
         page = st.radio(
             "main_navigation",
             _labels,
@@ -3616,20 +3621,3 @@ else:
         show_recycle_bin()
     elif page == "⚙️ Admin":
         show_admin_settings()
-
-    # အောက်ခြေ icon navigation (phone မှာ ဒေါင်မဖြစ်အောင် horizontal radio)
-    def _set_bottom_nav_target():
-        v = st.session_state.get("bottom_nav_page")
-        if v in _labels:
-            st.session_state["_nav_target_page"] = v
-
-    st.radio(
-        "",
-        options=_labels,
-        key="bottom_nav_page",
-        index=0,
-        format_func=lambda s: s.split(" ")[0] if isinstance(s, str) and " " in s else s,
-        horizontal=True,
-        label_visibility="collapsed",
-        on_change=_set_bottom_nav_target,
-    )
